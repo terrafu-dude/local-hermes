@@ -65,6 +65,21 @@ curl -s http://localhost:8642/v1/chat/completions \
   -d '{"model":"llama3.1:8b","messages":[{"role":"user","content":"Hi."}],"max_tokens":120}'
 ```
 
+## Screenshots (highlight reel)
+
+Live captures from the dashboard (`http://localhost:9120`) — a real, fully-local
+session: Hermes (qwen3.8-27b on ROCm) writing a short story on-device, with all
+tools running in the container.
+
+| Screenshot | What it shows |
+|---|---|
+| `docs/screenshots/dashboard-story-transcript.png` | Completed chat session — the prompt and the finished 144‑word "floating‑island fox" story in the dashboard |
+| `docs/screenshots/dashboard-story-workflow.png` | The session mid-work — model reflecting, tool/workspace activity in the embedded terminal |
+| `docs/screenshots/dashboard-sessions-list.png` | The dashboard Sessions/History list showing the story session (`.` qwen3.8‑27b, 9 msgs, 3 tools, source `Local`) |
+
+No cloud calls happen in any of these frames — the model is served by the local
+Ollama container on this AMD ROCm box.
+
 ## How it works
 
 Everything needed to deploy is in `docker-compose.yml` + the `./hermes` build
