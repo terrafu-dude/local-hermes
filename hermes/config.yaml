@@ -1,0 +1,21 @@
+# Hermes Agent config for a fully-local setup.
+# The ONLY model provider is the local Ollama container on this Docker network.
+# No API keys, no cloud model calls.
+
+model:
+  provider: custom
+  model: qwen3.8-27b:q4km       # unsloth Qwen3.8-27B UD-Q4_K_M GGUF, 262K native ctx
+  base_url: http://local-ollama:11434/v1
+  api_key: "none"   # local server doesn't validate it, but the header is sent
+
+# Lighter local model for delegated subagent tasks (also >=64K so it clears
+# Hermes's context floor). Both stay hot in Ollama (OLLAMA_KEEP_ALIVE=24h).
+delegation:
+  model: qwen3-4b:128k
+  base_url: http://local-ollama:11434/v1
+  api_key: "none"
+
+# Web-dashboard plugins (dashboard-only "services" tab + installed skills):
+plugins:
+  enabled:
+    - services

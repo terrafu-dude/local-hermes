@@ -1,0 +1,179 @@
+# local-hermes — a fully local AI agent on AMD ROCm
+#
+# EVERYTHING needed to deploy is in this file + the ./hermes build context.
+#   docker compose up -d --build
+# brings up:
+#   ollama (ROCm)   -> model server driving your AMD GPU
+#   hermes-agent    -> the agent framework, pointed at local Ollama
+# No cloud model provider, no API keys, no interactive setup wizard.
+#
+# First boot downloads the model (OLLAMA_LOCAL_MODEL, a few GB).
+# Everything after is fully offline and runs on your Radeon GPU.
+# Override the model on the CLI:  OLLAMA_LOCAL_MODEL=qwen2.5:7b docker compose up
+#
+# Drive the agent over HTTP (local-only):  see scripts/smoke-api.sh
+
+name: local-hermes
+
+services:
+  ollama:
+    image: ollama/ollama:rocm
+    container_name: local-ollama
+    restart: unless-stopped
+    environment:
+      # Listen on all interfaces so the hermes container can reach us.
+      OLLAMA_HOST: 0.0.0.0
+      # Keep loaded models resident between calls so they stay "hot" in VRAM.
+      OLLAMA_KEEP_ALIVE: "24h"
+      # Hermes Agent requires a min 64K context window; serve Qwen 3 at its
+      # full 128K scale so the main + subagent models both exceed the floor
+      # and give the requested ~100K window.
+      OLLAMA_CONTEXT_LENGTH: "131072"
+      # Only needed for AMD GPUs not officially whitelisted by ROCm.
+      # Radeon 8060S = gfx1151; try "11.0.0" if the GPU is not detected.
+      # HSA_OVERRIDE_GFX_VERSION: "11.0.0"
+    # Override the default `ollama serve` entrypoint so the model auto-
+    # provisions on first boot. `ollama pull` is a no-op once already local.
+    entrypoint: ["/bin/sh","-c","ollama serve & sleep 4; ollama pull ${OLLAMA_LOCAL_MODEL:-qwen3.8-27b:q4km}; ollama pull ${OLLAMA_SUBAGENT_MODEL:-qwen3-4b:128k}; wait"]
+    # AMD ROCm device passthrough — the two devices the driver needs.
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    # Match host group ownership of the GPU nodes.
+    # Check yours:  getent group video render
+    group_add:
+      - "44"     # video
+      - "990"    # render
+    volumes:
+      - ollama_models:/root/.ollama
+    ports:
+      - "11434:11434"   # host-facing, handy for curl demos / ollama CLI
+    networks:
+      - hermes-net
+
+  comfyui:
+    # Local text-to-image: ComfyUI built specifically for gfx1151 (Strix Halo).
+    # Recommended model FLUX.1-schnell (Apache-2.0). Web UI + API on :8188.
+    image: ignatberesnev/comfyui-gfx1151:v0.2
+    container_name: local-comfyui
+    restart: unless-stopped
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "44"     # video
+      - "990"    # render
+    environment:
+      # Authenticate HF model downloads (from .env / HF_TOKEN) — avoids rate limits.
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      # Mounting at /opt/ComfyUI (root) is REQUIRED: the image copies its
+      # pre-cloned ComfyUI here on first boot, but only if the dir already
+      # exists (its cp target isn't auto-created — image quirk).
+      - comfyui_home:/opt/ComfyUI           # code + checkpoints/VAE/encoders + output
+      - ./host-workspace/gallery:/opt/ComfyUI/output   # generated images land here (host-visible)
+    ports:
+      - "8188:8188"     # ComfyUI web + /prompt API
+    networks:
+      - hermes-net
+
+  piper:
+    # Local neural TTS (CPU, no GPU contention): OpenAI-compatible /v1/audio/speech.
+    image: kamilkrawiec/piper-openai-tts:latest
+    container_name: local-piper
+    restart: unless-stopped
+    platform: linux/amd64
+    environment:
+      PORT: "5000"
+      HF_TOKEN: ${HF_TOKEN:-}      # authenticated Piper voice downloads
+    volumes:
+      - piper_data:/data     # downloaded voices persist here
+    ports:
+      - "5000:5000"
+    networks:
+      - hermes-net
+
+  hub:
+    # Integrated navigation: one page linking every local web UI.
+    image: nginx:alpine
+    container_name: local-hub
+    restart: unless-stopped
+    volumes:
+      - ./services-hub:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+    networks:
+      - hermes-net
+
+  openwebui:
+    # Ollama's browser UI ("access ollama directly via its web interface").
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: local-openwebui
+    restart: unless-stopped
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - openwebui_data:/app/backend/data
+    ports:
+      - "3000:8080"
+    depends_on:
+      - ollama
+    networks:
+      - hermes-net
+
+  hermes:
+    # Seeded image: config.yaml + .env baked in, so no `hermes setup` needed.
+    build:
+      context: ./hermes
+      dockerfile: Dockerfile
+    image: local-hermes/hermes:local
+    container_name: local-hermes-agent
+    restart: unless-stopped
+    # Drive the local agent two ways:
+    #   • CLI one-shot     docker compose exec hermes hermes chat -q "..."
+    #   • Web dashboard    http://localhost:9120  (user/pass below)
+    # The gateway runs as this container's foreground main process with the
+    # dashboard + OpenAI API enabled (HERMES_GATEWAY_NO_SUPERVISE keeps it out
+    # of the s6 supervisor loop — issue #42675), so Docker's restart policy
+    # revives it on crash instead of the built-in supervisor.
+    command: ["gateway", "run"]
+    environment:
+      # OpenAI-compatible API for the local agent (health + completions).
+      API_SERVER_ENABLED: "true"
+      API_SERVER_HOST: "0.0.0.0"
+      API_SERVER_KEY: ${API_SERVER_KEY:-local-demo-key}
+      # Web dashboard, available on host port 9120 (published 9120 -> 9119),
+      # deliberately NOT 9119 so it never collides with the host Hermes.
+      HERMES_DASHBOARD: "1"
+      HERMES_DASHBOARD_HOST: "0.0.0.0"
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: ${DASHBOARD_USER:-local}
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: ${DASHBOARD_PASS:-local-demo-pass}
+      HERMES_DASHBOARD_BASIC_AUTH_SECRET: ${DASHBOARD_SECRET:-local-dash-secret}
+      # Pre-s6 foreground gateway (main process, Docker-managed restart).
+      HERMES_GATEWAY_NO_SUPERVISE: "1"
+      HF_TOKEN: ${HF_TOKEN:-}      # for the agent's HuggingFace provider/models
+    volumes:
+      # Named volume seeds from the baked /opt/data on first boot and persists
+      # sessions / skills / memory across container recreate.
+      - hermes_data:/opt/data
+      # Real files for the agent to work on (host viewable, agent-writable).
+      - ./host-workspace:/work
+    ports:
+      - "8642:8642"     # gateway OpenAI-compatible API / health
+      - "9120:9119"     # local web dashboard (distinct host port)
+    depends_on:
+      - ollama
+    networks:
+      - hermes-net
+
+networks:
+  hermes-net:
+    driver: bridge
+
+volumes:
+  ollama_models:
+  hermes_data:
+  comfyui_home:
+  piper_data:
+  openwebui_data:

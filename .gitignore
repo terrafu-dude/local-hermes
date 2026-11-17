@@ -1,0 +1,24 @@
+# ── Secrets — never commit ──────────────────────────────
+# Only the root .env is the real secret store (HF token). hermes/.env is an
+# empty seed that must ship (the Dockerfile COPYs it), so ignore just the root.
+/.env
+.env.*
+!.env.example
+
+# ── Running data / generated output ─────────────────────
+# host-workspace/ is bind-mounted to the agent's /work (its live scratch space).
+# Only the workflow config is source; images/audio/downloads/sessions are runtime.
+host-workspace/*
+!host-workspace/workflows/
+host-workspace/workflows/*
+!host-workspace/workflows/flux-txt2img.json
+host-workspace/.models-staging/
+host-workspace/gallery/
+host-workspace/*.wav
+host-workspace/*.png
+host-workspace/notes.md
+
+# ── Python / tooling cruft ──────────────────────────────
+__pycache__/
+*.pyc
+.DS_Store

@@ -1,0 +1,9 @@
+{
+  "name": "services",
+  "label": "Services",
+  "description": "Launchpad for the local stack: ComfyUI, Ollama WebUI, Piper TTS, Hermes.",
+  "icon": "Globe",
+  "version": "1.0.0",
+  "tab": { "path": "/services", "position": "end" },
+  "entry": "dist/index.js"
+}

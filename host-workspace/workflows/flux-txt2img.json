@@ -1,0 +1,33 @@
+{
+  "prompt": {
+    "1": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "flux1-schnell.safetensors" } },
+    "2": { "class_type": "CLIPTextEncode", "inputs": { "text": "#PROMPT#", "clip": ["1", 1] } },
+    "3": {
+      "class_type": "KSampler",
+      "inputs": {
+        "seed": 1,
+        "steps": 4,
+        "cfg": 1.0,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "denoise": 1.0,
+        "model": ["1", 0],
+        "positive": ["2", 0],
+        "negative": ["6", 0],
+        "latent_image": ["4", 0]
+      }
+    },
+    "4": { "class_type": "EmptyLatentImage", "inputs": { "width": 1024, "height": 1024, "batch_size": 1 } },
+    "5": { "class_type": "VAEDecode", "inputs": { "samples": ["3", 0], "vae": ["1", 2] } },
+    "6": { "class_type": "CLIPTextEncode", "inputs": { "text": "", "clip": ["1", 1] } },
+    "7": { "class_type": "SaveImage", "inputs": { "filename_prefix": "hermes", "images": ["5", 0] } }
+  },
+  "meta": {
+    "model": "flux1-schnell.safetensors (fp8)",
+    "steps": 4,
+    "cfg": 1.0,
+    "sampler": "euler/simple",
+    "size": "1024x1024",
+    "note": "FLUX.1-schnell txt2img API workflow. scripts/comfy-image.sh injects #PROMPT# and #SEED#; the agent (local-media-studio skill) POSTs this to ComfyUI /prompt."
+  }
+}

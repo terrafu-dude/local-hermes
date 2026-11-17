@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>local-hermes · services</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: ui-monospace, monospace; margin: 0; background: #0f1117; color: #e6e6e6; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+  h1 { font-size: 20px; letter-spacing: .02em; }
+  h1 small { color: #888; font-weight: normal; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px,1fr)); gap: 14px; margin-top: 24px; }
+  a.card { display: block; padding: 18px; border: 1px solid #2a2f3a; border-radius: 12px; text-decoration: none;
+           color: inherit; background: #171a22; transition: border-color .15s, transform .1s; }
+  a.card:hover { border-color: #58C4DD; transform: translateY(-2px); }
+  .card .nm { font-weight: 700; font-size: 15px; color: #58C4DD; }
+  .card .url { font-size: 12px; color: #8a93a6; margin-top: 6px; word-break: break-all; }
+  .foot { margin-top: 34px; font-size: 12px; color: #5c6472; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>local-hermes <small>— fully-local media + agent services</small></h1>
+  <div class="grid">
+    <a class="card" href="http://localhost:9120" target="_blank"><div class="nm">Hermes Agent</div><div class="url">http://localhost:9120</div></a>
+    <a class="card" href="http://localhost:8188" target="_blank"><div class="nm">ComfyUI</div><div class="url">http://localhost:8188</div></a>
+    <a class="card" href="http://localhost:3000" target="_blank"><div class="nm">Ollama WebUI</div><div class="url">http://localhost:3000</div></a>
+    <a class="card" href="http://localhost:5000" target="_blank"><div class="nm">Piper TTS</div><div class="url">http://localhost:5000</div></a>
+  </div>
+  <div class="foot">
+    Run via <b>docker compose up -d</b>.<br>
+    Image: <b>ComfyUI</b> (FLUX.1-schnell) · <b>Open WebUI</b>/Ollama (llama3.8-27b:q4km) · <b>Piper</b> (neural TTS).
+  </div>
+</div>
+</body>
+</html>
