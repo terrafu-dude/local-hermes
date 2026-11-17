@@ -67,18 +67,21 @@ curl -s http://localhost:8642/v1/chat/completions \
 
 ## Screenshots (highlight reel)
 
-Live captures from the dashboard (`http://localhost:9120`) — a real, fully-local
-session: Hermes (qwen3.8-27b on ROCm) writing a short story on-device, with all
-tools running in the container.
+Live captures — a fully-local Hermes (qwen3.8-27b on ROCm) writing a story and
+generating its illustration entirely on-device, plus the services portal.
+Screenshots were captured from the running dashboard (`http://localhost:9120`)
+on a desktop viewport.
 
 | Screenshot | What it shows |
 |---|---|
-| `docs/screenshots/dashboard-story-transcript.png` | Completed chat session — the prompt and the finished 144‑word "floating‑island fox" story in the dashboard |
-| `docs/screenshots/dashboard-story-workflow.png` | The session mid-work — model reflecting, tool/workspace activity in the embedded terminal |
-| `docs/screenshots/dashboard-sessions-list.png` | The dashboard Sessions/History list showing the story session (`.` qwen3.8‑27b, 9 msgs, 3 tools, source `Local`) |
+| `docs/screenshots/hub-portal.png` | The services portal — links to every local web UI (Hermes, ComfyUI, Ollama WebUI, Piper) |
+| `docs/screenshots/chat-story-result.png` | Dashboard chat — Hermes writing the 144‑word "floating‑island fox" story |
+| `docs/screenshots/generated-fox-story-image.png` | The 1024×1024 image the agent generated for the story via ComfyUI (FLUX.1‑schnell), on-device |
+| `docs/screenshots/sessions-history.png` | The dashboard Sessions/History list |
 
 No cloud calls happen in any of these frames — the model is served by the local
-Ollama container on this AMD ROCm box.
+Ollama container and images by the local ComfyUI container, both on this AMD ROCm
+box. Image files are stored with Git LFS.
 
 ## How it works
 
