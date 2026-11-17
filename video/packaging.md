@@ -16,7 +16,7 @@
 Full description bullets:
 - 🖥 Hardware: Radeon 8060S / 8050S (Strix Halo), 122 GB RAM
 - ⚙ Stack: Docker Compose → Ollama (ROCm) + Hermes Agent on one bridge network
-- 🧠 Model: llama3.1:8b, 131K native context, 100% GPU
+- 🧠 Model: qwen3.8-27b:q4km, 262K native context, 100% GPU (131K served)
 - ⚠ Two gotchas that cost me time: the 64K context floor, and Hermes-models-not-being-agentic
 - 🔗 Repo/README + scripts in the description (link the `local-hermes` project)
 - ⏱ Chapters: 00:00 Hook · 01:10 Hardware · 02:00 Compose · 03:30 Config ·

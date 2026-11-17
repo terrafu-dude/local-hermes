@@ -14,7 +14,7 @@ Total ~9 min. Format: `SCENE | TIME | VISUAL | AUDIO | WORKING COMMAND`.
 |---|------|--------|-------|-----------------|
 | B1 | 1:40 | Ollama service block in compose (devices + group_add) | GPU passthrough explainer | `getent group video render` |
 | B2 | 2:00 | Compose up; first-boot download ticker | Auto-pull, model once | `docker compose up -d --build` |
-| B3 | 2:50 | `ollama list` + `ollama ps` | "100% GPU, 65536 ctx" | `docker compose exec ollama ollama ps` |
+| B3 | 2:50 | `ollama list` + `ollama ps` | "100% GPU, 131072 ctx" | `docker compose exec ollama ollama ps` |
 | B4 | 3:30 | `hermes/config.yaml` (custom provider → local-ollama) | Config seeding explainer | `docker compose exec hermes grep -A4 '^model:' /opt/data/config.yaml` |
 | B5 | 4:10 | ⚠ Error screenshot: "below the minimum 64,000" | Context-floor gotcha | (replay the failing `hermes chat`) |
 | B6 | 5:00 | ⚠ CLI banner: "Hermes 3 & 4 … NOT agentic" | Name≠capability gotcha | `docker compose exec hermes hermes chat -q "…"` |

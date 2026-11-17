@@ -12,14 +12,15 @@
 
 ## 1. Boot
 - [ ] `docker compose up -d --build`
-- [ ] Wait for model auto-pull (first boot ~4.9 GB). Verify:
-      `docker compose exec ollama ollama list` → `llama3.1:8b`
+- [ ] Wait for model auto-pull (first boot ~20 GB for the two models). Verify:
+      `docker compose exec ollama ollama list` → `qwen3.8-27b:q4km`, `qwen3-4b:128k`
 - [ ] Stack healthy:
       `docker compose ps` → `hermes Up`, `ollama Up`
 
 ## 2. Gotcha #1 (context floor) — optional but recommended for the video
-- [ ] Show the qwen2.5 failure (set model to qwen2.5:14b, run chat, show the
-      64K / 32768 error) OR just narrate with a screenshot. Either is truthful.
+- [ ] Show the failure with a STOCK qwen3.8/qwen tag (clamps at ~40K → the
+      "below the minimum 64,000" error), then the fix: the unsloth extended-context
+      GGUF aliased as `qwen3.8-27b:q4km` (262K native). Either is truthful.
 
 ## 3. Gotcha #2 (Hermes model not agentic) — optional
 - [ ] `docker compose exec hermes hermes chat -q "…"` and capture the banner
@@ -32,22 +33,23 @@
 
 ## 5. Proof it's local + on GPU
 - [ ] `docker compose exec ollama ollama ps`
-      → `llama3.1:8b … 13 GB … 100% GPU … 65536`
+      → `qwen3.8-27b:q4km … 24 GB … 100% GPU … 131072`
 - [ ] `docker compose logs ollama | grep -i "inference compute"`
       → `library=ROCm … gfx1151 … Radeon 8060S Graphics`
 - [ ] `docker compose exec hermes grep -A4 '^model:' /opt/data/config.yaml`
       → only `http://local-ollama:11434/v1`
 
 ## 6. Close
-- [ ] `docker compose exec ollama ollama list` → single model, clean
+- [ ] `docker compose exec ollama ollama list` → the two aliased models, clean
 - [ ] README scrolled; show the "architecture" ASCII + troubleshooting table
 
 ---
 ## Pitfalls you will hit if this is re-made on another machine
 1. **Docker socket permission** — user must be in `docker` group (re-login;
    a fresh tab from the same login session does NOT pick it up — use `newgrp docker`).
-2. **Hermes needs ≥64K context** — a 32K-native model (qwen2.5) is rejected even
-   with `OLLAMA_CONTEXT_LENGTH=65536`; use llama3.1 (131K native).
+2. **Hermes needs ≥64K context** — stock Ollama `qwen` tags clamp at ~40K and are
+   rejected; use an extended-context GGUF aliased via `ollama create` (here
+   qwen3.8-27b:q4km, 262K native) with `OLLAMA_CONTEXT_LENGTH=131072`.
 3. **s6 gateway usually must not boot on a no-platform local install** — keep
    the agent on-demand via `docker compose exec hermes hermes chat -q`, not an
    always-on supervised gateway (issue #42675).

@@ -9,10 +9,10 @@ machine. Do not call any cloud service.
 
 Steps:
 1. Review the delivered setup so your narration is true to it: Ollama (ROCm)
-   drives llama3.1:8b on the AMD Radeon (Strix Halo), Hermes Agent calls tools
-   on-device, everything runs in Docker offline.
+   drives qwen3.8-27b:q4km on the AMD Radeon (Strix Halo), Hermes Agent calls
+   tools on-device, everything runs in Docker offline.
 2. Write a short VO script (200–300 words) that a viewer can follow, mentioning
-   the key numbers you can actually see here: 100% GPU, 65536 context, the two
+   the key numbers you can actually see here: 100% GPU, 131072 context, the two
    gotchas (64K context floor; the "Hermes"/hermes3 model not being agentic).
 3. Generate the narration with LOCAL TTS: espeak-ng (installed). Use
    `espeak-ng -v en-us -s 160 -w nar.wav "…"` per line, or piper-tts if you

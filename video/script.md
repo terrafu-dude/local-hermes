@@ -41,10 +41,10 @@ are the kernel driver devices, `/dev/kfd` and `/dev/dri`, and the group IDs for
 boot. Yes, that pull is the only network call, ever."
 
 ## 2:50 — Boot it
-**Visual:** `docker compose up -d --build`; the pull ticker (4.9 GB).
+**Visual:** `docker compose up -d --build`; the pull ticker (~20 GB, two models).
 **VO:**
-"One command. Images build, the model downloads once, and `ollama ps` shows
-`llama3.1:8b — 100% GPU — 65536 context`. That GPU column is the whole point."
+"One command. Images build, the models download once, and `ollama ps` shows
+`qwen3.8-27b:q4km — 100% GPU — 131072 context`. That GPU column is the whole point."
 
 ## 3:30 — The config that makes Hermes local
 **Visual:** `hermes/config.yaml`.
@@ -57,10 +57,11 @@ wizard, no API keys, no cloud anywhere."
 ## 4:10 — Gotcha #1: the context window floor
 **Visual:** the error "context window … below the minimum 64,000 required".
 **VO:**
-"The first model I tried was qwen2.5. Hermes said no — it needs at least a
-64,000-token context, and qwen2.5 only serves 32K natively. Raising Ollama's
-context flag doesn't fix a model that was only ever trained to 32K. So the
-rule is: pick a model with a native context of 64K or more. llama3.1 is 131K."
+"The stock Ollama tags for Qwen3.8 clamp context at ~40K. Hermes said no — it
+needs at least a 64,000-token context. And you can't push a model past the
+context it was tested on, no matter what flag you set. So the fix is an
+extended-context GGUF — unsloth's Qwen3.8-27B is 262K native — aliased so
+Ollama serves it at 131K. Rule: the model needs 64K or more native context."
 
 ## 5:00 — Gotcha #2: "Hermes" doesn't mean agentic
 **Visual:** the CLI warning "Hermes 3 & 4 models are NOT agentic… lack tool-calling."
@@ -68,7 +69,7 @@ rule is: pick a model with a native context of 64K or more. llama3.1 is 131K."
 "Here's a tripwire: I tried the model literally named Hermes. Cute — but the
 agent's own banner says Hermes 3 and 4 are NOT agentic; no tool calling. A
 'local AI agent' needs a model that actually calls tools, so the default here
-is llama3.1, which is proven at this."
+is qwen3.8-27b, which is proven at this."
 
 ## 5:40 — The money shot: it calls tools on-device
 **Visual:** the live demo. `🔎 Find *.md` → `📖 Read notes.md` → answer.

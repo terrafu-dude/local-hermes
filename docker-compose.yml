@@ -7,9 +7,10 @@
 #   hermes-agent    -> the agent framework, pointed at local Ollama
 # No cloud model provider, no API keys, no interactive setup wizard.
 #
-# First boot downloads the model (OLLAMA_LOCAL_MODEL, a few GB).
+# First boot downloads the models (OLLAMA_LOCAL_MODEL + OLLAMA_SUBAGENT_MODEL,
+# ~20 GB for qwen3.8-27b:q4km + qwen3-4b:128k).
 # Everything after is fully offline and runs on your Radeon GPU.
-# Override the model on the CLI:  OLLAMA_LOCAL_MODEL=qwen2.5:7b docker compose up
+# Override the model on the CLI:  OLLAMA_LOCAL_MODEL=qwen3.8-27b:q4km docker compose up
 #
 # Drive the agent over HTTP (local-only):  see scripts/smoke-api.sh
 
