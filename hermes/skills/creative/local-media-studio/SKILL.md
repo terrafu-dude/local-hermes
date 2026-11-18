@@ -35,10 +35,12 @@ Workflow: **`/work/workflows/wan-t2v.json`** (Wan 2.1 text-to-video 1.3B, 480p).
 2. POST `/prompt` as above → `{prompt_id}`.
 3. Poll `/history/<prompt_id>` until an `outputs` entry exists (generation takes a
    few minutes for ~15 s).
-4. The `SaveWEBM` node writes `hermes_video_00001_.webm` into ComfyUI output.
-   Fetch it via `GET /view?filename=hermes_video_00001_.webm&type=output`.
-5. Write the bytes to **`/work/videos/<name>.webm`** (create the dir) and report
-   the exact path + duration.
+4. Read the NEWEST output filename from that history entry — the `SaveWEBM` node
+   is `outputs["9"]["images"][0]["filename"]` (it auto-increments the index like
+   `hermes_video_00002_.webm`, so never assume `_00001_`).
+5. `GET /view?filename=<that filename>&type=output` → bytes. Write them to
+   **`/work/videos/<name>.webm`** (create the dir) and report the exact path +
+   duration.
 Write cinematic scene descriptions; the model renders 480p clips. Longer = slower;
 keep ~5–20 s.
 

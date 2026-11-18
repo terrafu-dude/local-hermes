@@ -48,9 +48,10 @@ for i in $(seq 1 800); do
 done
 [ "$ok" -eq 1 ] || { echo "ERROR: timed out waiting for prompt $PID" >&2; exit 1; }
 sleep 6   # let SaveWEBM finalize + close the file
-# SaveWEBM auto-increments the filename when one already exists, so never fetch
-# a hardcoded index — take the NEWEST hermes_video_*.webm from ComfyUI output.
-NF=$(docker compose exec -T comfyui sh -c 'ls -t /opt/ComfyUI/output/hermes_video_*.webm 2>/dev/null | head -1' 2>/dev/null | xargs -r basename 2>/dev/null)
+# SaveWEBM auto-increments the filename when one already exists. Read the
+# exact filename from this prompt's history output instead of guessing:
+#   /history/<pid> → outputs["9"].images[0].filename
+NF=$(curl -s "$BASE/history/$PID" | python3 -c "import sys,json;d=json.load(sys.stdin);o=d.get('$PID',{}).get('outputs',{});print(o['9']['images'][0]['filename'])" 2>/dev/null)
 [ -n "$NF" ] || NF="hermes_video_00001_.webm"
 OUT="$OUTDIR/${NAME}_00001_.webm"
 curl -s -o "$OUT" "$BASE/view?filename=$NF&type=output"
