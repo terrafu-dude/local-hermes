@@ -181,9 +181,17 @@ Two more local services ride the same `hermes-net` — both fully on-device:
 # generate an image (FLUX.1-schnell, configured workflow) → host-workspace/gallery/
 bash scripts/comfy-image.sh "a red fox on a floating island under the stars, cinematic"
 
+# generate a ~15 s text-to-video clip (Wan 2.1 T2V 1.3B) → host-workspace/videos/
+bash scripts/comfy-video.sh "a red fox on a floating island under the stars, cinematic" 15 fox_story
+
 # synthesize narration → <out>.wav
 bash scripts/piper-tts.sh "I am a fully local AI agent on an AMD machine." out.wav
 ```
+
+Video generation uses **Wan 2.1 T2V 1.3B** (Apache-2.0) through the same on-device
+ComfyUI (832×480, VP9 WebM). The `local-media-studio` skill teaches the agent both
+image and video, so you can ask it to *"write a short story and make a 15 second
+video"* and it will render it offline.
 
 **VRAM note:** the two hot Ollama models hold ~35 GB of the ~61 GB pool. To give
 ComfyUI room to render, unload them first (they reload on demand):
