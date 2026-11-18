@@ -48,13 +48,16 @@ for i in $(seq 1 800); do
 done
 [ "$ok" -eq 1 ] || { echo "ERROR: timed out waiting for prompt $PID" >&2; exit 1; }
 sleep 6   # let SaveWEBM finalize + close the file
-# Deterministic output name from SaveWEBM (filename_prefix → <prefix>_00001_.webm)
+# SaveWEBM auto-increments the filename when one already exists, so never fetch
+# a hardcoded index — take the NEWEST hermes_video_*.webm from ComfyUI output.
+NF=$(docker compose exec -T comfyui sh -c 'ls -t /opt/ComfyUI/output/hermes_video_*.webm 2>/dev/null | head -1' 2>/dev/null | xargs -r basename 2>/dev/null)
+[ -n "$NF" ] || NF="hermes_video_00001_.webm"
 OUT="$OUTDIR/${NAME}_00001_.webm"
-curl -s -o "$OUT" "$BASE/view?filename=hermes_video_00001_.webm&type=output"
+curl -s -o "$OUT" "$BASE/view?filename=$NF&type=output"
 SZ=$(stat -c%s "$OUT" 2>/dev/null || echo 0)
 if file "$OUT" 2>/dev/null | grep -qi "matroska\|webm\|video" && [ "$SZ" -gt 80000 ]; then
-  echo "OK -> $OUT ($(du -h "$OUT" | cut -f1))"
+  echo "OK -> $OUT (from $NF, $(du -h "$OUT" | cut -f1))"
 else
-  echo "WARN: output at $OUT is ${SZ}B / not a valid video (maybe still rendering)" >&2
+  echo "WARN: output at $OUT is ${SZ}B / not a valid video (newest was $NF)" >&2
   exit 1
 fi
