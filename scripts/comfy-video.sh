@@ -36,20 +36,25 @@ PY
 PID=$(curl -s -X POST "$BASE/prompt" -H 'Content-Type: application/json' -d "$BODY" | python3 -c 'import sys,json;print(json.load(sys.stdin)["prompt_id"])' 2>/dev/null)
 [ -z "$PID" ] && { echo "ERROR: ComfyUI rejected the prompt (Wan model loaded?)" >&2; exit 1; }
 echo "queued prompt_id=$PID (${LENGTH} frames @ ${FPS}fps ≈ ${DUR}s); polling..."
-for i in $(seq 1 400); do
-  Q=$(curl -s -m8 "$BASE/queue")
-  RUN=$(echo "$Q" | python3 -c 'import sys,json;print(len(json.load(sys.stdin).get("queue_running",())))' 2>/dev/null)
-  if [ "$RUN" -eq 0 ] 2>/dev/null; then
-    H=$(curl -s "$BASE/history/$PID")
-    if echo "$H" | grep -q "\"$PID\""; then break; fi
-  fi
+rm -f "$OUTDIR/${NAME}_00001_.webm"
+# Wait for THIS prompt_id to appear in history — the authoritative completion
+# signal (the queue can sit in flows/VAE between steps; a transient empty queue
+# is NOT completion).
+ok=0
+for i in $(seq 1 800); do
+  H=$(curl -s "$BASE/history/$PID")
+  if [ "$(echo "$H" | grep -c "\"$PID\"")" -gt 0 ]; then ok=1; break; fi
   sleep 3
 done
+[ "$ok" -eq 1 ] || { echo "ERROR: timed out waiting for prompt $PID" >&2; exit 1; }
+sleep 6   # let SaveWEBM finalize + close the file
 # Deterministic output name from SaveWEBM (filename_prefix → <prefix>_00001_.webm)
 OUT="$OUTDIR/${NAME}_00001_.webm"
 curl -s -o "$OUT" "$BASE/view?filename=hermes_video_00001_.webm&type=output"
-if file "$OUT" 2>/dev/null | grep -qi "matroska\|webm\|video"; then
+SZ=$(stat -c%s "$OUT" 2>/dev/null || echo 0)
+if file "$OUT" 2>/dev/null | grep -qi "matroska\|webm\|video" && [ "$SZ" -gt 80000 ]; then
   echo "OK -> $OUT ($(du -h "$OUT" | cut -f1))"
 else
-  echo "WARN: output not a video at $OUT" >&2; rm -f "$OUT"; exit 1
+  echo "WARN: output at $OUT is ${SZ}B / not a valid video (maybe still rendering)" >&2
+  exit 1
 fi
