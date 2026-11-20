@@ -4,49 +4,52 @@ Run **Hermes Agent** (Nous Research's agent framework) with its own local
 inference, entirely in Docker, on an AMD GPU. No cloud model, no API keys,
 no data leaves your machine.
 
-Runs **qwen3.8-27b:q4km** — the unsloth *Qwen3.8-27B UD-Q4_K_M* GGUF (262K
-native context) — plus a lighter **qwen3-4b:128k** subagent for delegated
-tasks. Both are served by a local Ollama (ROCm) container.
+The inference engine is **Gufo** — the Strix Halo–native server for AMD's
+Radeon 8060S/8050S (`gfx1151`) — serving **Qwen3.8-27B UD-Q4_K_XL** with
+**DFlash2 speculative decoding** (a small `z-lab/...DFlash2-Q4_K_M` draft for
+faster output), plus fully-local **voice**: faster-whisper for speech-to-text
+and Piper for text-to-speech.
 
 Verified on: **AMD Radeon 8060S/8050S ("Strix Halo"), 122 GB system RAM,
 Linux + Docker**. Runs fully offline after first boot.
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│  localhost                                                    │
-│                                                              │
-│  ┌──────────── hermes-net (bridge) ─────────────┐            │
-│  │   local-hermes-agent       local-ollama      │            │
-│  │   Hermes Agent framework   Ollama (ROCm)     │            │
-│  │   ├─ /opt/data (config,    │  ┌─ qwen3.8-27b:q4km        │
-│  │  │   sessions, skills)     │  │  qwen3-4b:128k           │
-│  │   ├─ /work (files)         │  │  131072 ctx · 100% GPU   │
-│  │   └─ →http://local-ollama  │  └── /dev/kfd + /dev/dri    │
-│  │        :11434/v1 ◄─────────┘                              │
-│  └──────────────────────────────────────────────────────────┘
-│           ▲
-│   web dashboard :9120 · OpenAI API :8642 · local ComfyUI :8188
-│   Open WebUI :3000 · Piper TTS :5000 · services hub :8080
+│  localhost                                                  │
+│                                                             │
+│  ┌──────────────── hermes-net (bridge) ──────────────────┐  │
+│  │   local-gufo      local-hermes-agent   local-openwebui│  │
+│  │   Gufo (ROCm)     Hermes Agent         chat web UI    │  │
+│  │   ├─ Qwen3.8-27B   ├─ /opt/data (config,             │  │
+│  │  │  UD-Q4_K_XL      │   sessions, skills, hf-cache)  │  │
+│  │   └─ DFlash2 draft  ├─ /work (host-workspace)        │  │
+│  │     128K ctx        └─ →http://gufo:8080/v1          │  │
+│  │     3 sessions       └─ voice: faster-whisper + piper│  │
+│  └────────────────────┴──────────────────────────────────┘  │
+│           ▲              local-hub :8080 (services portal) │
+│   OpenAI API :8000 · web dashboard :9120 · Open WebUI :3000│
 └──────────────────────────────────────────────────────────────┘
 ```
 
 ## Prerequisites
 
 1. **An AMD GPU that ROCm supports.** Verified on Radeon 8060S/8050S (Strix
-   Halo, gfx1151 — detected natively, no override needed). For another ASIC see
-   "GPU not detected" in Troubleshooting.
+   Halo, `gfx1151` — detected natively, no override needed). For another ASIC
+   see "GPU not detected" in Troubleshooting.
 2. **Docker** with GPU passthrough: your user must be in the `docker` group
    (`sudo usermod -aG docker $USER`, then re-login), and the container needs
    `/dev/kfd` and `/dev/dri`.
-3. **~20 GB free** for the two models, plus ~4 GB for the base images.
+3. **~20 GB free** for the Qwen3.8-27B weights (+ ~1 GB DFlash2 draft), plus
+   the base images.
 
 ## Quick start
 
 ```bash
 git clone git@github.com:terrafu-dude/local-hermes.git && cd local-hermes
-docker compose up -d --build   # first boot pulls both models (~20 GB)
-bash scripts/verify-gpu.sh     # GPU detected + model served on-device
-bash scripts/smoke-agent.sh    # tool-calling works on the local model
+cp .env.example .env              # optionally set HF_TOKEN to avoid rate limits
+docker compose up -d --build      # first boot installs the Gufo model (~21 GB)
+curl -s http://localhost:8000/v1/models     # → qwen27-q4 (served on-device)
+docker compose exec hermes hermes chat -q "Hi, in one short sentence."   # agent answers via Gufo
 ```
 
 Everything after the first boot is **fully offline**.
@@ -56,42 +59,62 @@ Everything after the first boot is **fully offline**.
 | Surface | URL | Auth |
 |---|---|---|
 | **Services portal** (start here) | http://localhost:**8080** | none |
-| **Web dashboard** | http://localhost:**9120** | `local` / `local-demo-pass` (override via `DASHBOARD_USER`/`DASHBOARD_SECRET`) |
-| **OpenAI API** | http://localhost:**8642** `/v1` | `Authorization: Bearer <key>` |
-| **ComfyUI** (text-to-image) | http://localhost:**8188** | none |
-| **Ollama WebUI** | http://localhost:**3000** | set once, then open |
-| **Piper TTS** | http://localhost:**5000** | none |
+| **Web dashboard** | http://localhost:**9120** | `local` / `local-demo-pass` (override via `DASHBOARD_USER`/`DASHBOARD_PASS`) |
+| **Gufo OpenAI API** | http://localhost:**8000** `/v1` | none (local) |
+| **Open WebUI** (chat browser) | http://localhost:**3000** | set once, then open |
 | **CLI (tool calling)** | — | `docker compose exec hermes hermes chat -q "…"` |
 
-The API key auto-generates on first boot (`/opt/data/.env` →
-`API_SERVER_KEY=…`):
+Example call against Gufo's API:
 
 ```bash
-docker compose exec hermes grep '^API_SERVER_KEY=' /opt/data/.env
-curl -s http://localhost:8642/v1/chat/completions \
+curl -s http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <key>" \
-  -d '{"model":"qwen3.8-27b:q4km","messages":[{"role":"user","content":"Hi."}],"max_tokens":120}'
+  -d '{"model":"qwen27-q4","messages":[{"role":"user","content":"Hi."}],"max_tokens":120}'
 ```
 
-## Screenshots (highlight reel)
+### Desktop app ↔ gateway
 
-Live captures — a fully-local Hermes (qwen3.8-27b on ROCm) writing a story and
-generating its illustration entirely on-device, plus the services portal.
-All screenshots were taken from the running stack on a desktop viewport.
-(The image files are stored with Git LFS.)
+The native Hermes desktop app dials the dashboard's live WebSocket
+(`/api/ws`). Hermes only serves that socket's session token when the gateway
+isn't behind the auth gate, and the default token rotates on every restart —
+which is why a *stable* token is pinned here. Generate one, put it in `.env`,
+and enter it in the desktop's gateway connection:
 
-![The services portal — one page linking every local web UI](docs/screenshots/hub-portal.png)
+```bash
+openssl rand -hex 24                      # then in .env:
+# DASHBOARD_SESSION_TOKEN=<that value>
+docker compose up -d hermes               # re-apply the env
+```
+**URL:** `http://localhost:9120` · **Token:** the `DASHBOARD_SESSION_TOKEN` value.
 
-![Hermes writing the 144-word "floating-island fox" story in the dashboard chat](docs/screenshots/chat-story-result.png)
+## Voice (fully local, free)
 
-![The 1024x1024 image the agent generated for the story via on-device ComfyUI (FLUX.1-schnell)](docs/screenshots/generated-fox-story-image.png)
+The agent can listen and talk back with no cloud services.
 
-![Dashboard Sessions/History view](docs/screenshots/sessions-history.png)
+- **Speech-to-text:** faster-whisper (`base`) — local, free.
+- **Text-to-speech:** Piper (`en_US-lessac-medium`) — local neural voice.
 
-No cloud calls happen in any of these frames — the model is served by the local
-Ollama container and the images by the local ComfyUI container, both on this
-AMD ROCm box.
+```yaml
+# hermes/config.yaml (shipped — the engines are baked into the image)
+stt:
+  enabled: true
+  provider: local            # faster-whisper
+  local:
+    model: base              # tiny | base | small | medium | large-v3 | turbo
+tts:
+  provider: piper            # local neural TTS; set tts.piper.voice to switch
+```
+
+The Whisper model and Piper voice download **once** into the persistent,
+service-writable `HF_HOME=/opt/data/hf-cache` (the `hermes` service user's own
+writable data volume), then survive container recreates. Both engines are baked
+into the image (`faster-whisper`, `piper-tts`, `av<19` — PyAV 19 dropped a kwarg
+faster-whisper needs for audio decode).
+
+Turn on voice-to-voice in a session with the slash command: **`/voice on`**
+(`/voice tts` for always-voice, `/voice off` to stop). Verify with
+`docker compose exec hermes hermes doctor` (reports `✓ stt` / `✓ tts`).
+Change the speaking voice with `tts.piper.voice: en_US-lessac-medium`.
 
 ## How it works
 
@@ -100,150 +123,94 @@ context — there is no manual `hermes setup` wizard.
 
 | Piece | What it does |
 |---|---|
-| **`ollama`** (`ollama/ollama:rocm`) | Model server. Passes `/dev/kfd` + `/dev/dri`, joins the `video`/`render` groups, serves **131072** context. Auto-pulls and keeps warm the main model (qwen3.8-27b:q4km) + subagent (qwen3-4b:128k). |
-| **`hermes`** (`nousresearch/hermes-agent` + `./hermes/Dockerfile`) | The agent + a stable always-on gateway. The Dockerfile bakes `config.yaml` into `/opt/data`, installs a fully-local video toolchain, ships the Services dashboard plugin, and removes the crashing profile-reconciler. |
-| **`comfyui`** | FLUX.1-schnell text-to-image on the Radeon (native gfx1151). |
-| **`piper`** | Local neural TTS (OpenAI-compatible). |
-| **`openwebui`** | Browser front-end for Ollama. |
+| **`gufo`** (`ghcr.io/gufo-org/toolboxes/gufo-runtime`) | Strix Halo–native model server (ROCm/HIP). Passes `/dev/kfd` + `/dev/dri` (+ the NPU `/dev/accel/accel0`), serves `qwen27-q4` = Qwen3.8-27B UD-Q4_K_XL + DFlash2 draft. OpenAI-compatible at :8000. |
+| **`hermes`** (`./hermes/Dockerfile`) | The agent + a stable always-on gateway. The Dockerfile bakes `config.yaml` + `.env` into `/opt/data`, installs the fully-local voice engines (`faster-whisper`/`piper-tts`), ships the Services dashboard plugin, and removes the crashing profile-reconciler. |
+| **`openwebui`** | Browser front-end pointed at Gufo's OpenAI API. |
 | **`hub`** | The services portal page. |
+| (*`ollama-fallback`*) | Opt-in: the old Ollama server is kept behind the `ollama-fallback` compose profile, not deleted. |
 
-The only config that matters (`hermes/config.yaml`):
+The config that matters (`hermes/config.yaml`):
 
 ```yaml
-model:                      # main agent model
-  provider: custom          # talk to an OpenAI-compatible endpoint
-  model: qwen3.8-27b:q4km   # unsloth Qwen3.8-27B UD-Q4_K_M, 262K native ctx
-  base_url: http://local-ollama:11434/v1
-  api_key: "none"           # local server sends the header but doesn't validate it
+model:                      # main agent model (via local Gufo)
+  provider: custom
+  model: qwen27-q4          # Qwen3.8-27B UD-Q4_K_XL + DFlash2
+  base_url: http://gufo:8080/v1
+  api_key: "none"
 
-delegation:                 # lighter local model for subagent tasks (≥64K too)
-  model: qwen3-4b:128k
-  base_url: http://local-ollama:11434/v1
+delegation:                 # subagent tasks — same resident model
+  model: qwen27-q4
+  base_url: http://gufo:8080/v1
   api_key: "none"
 ```
 
-### Why an extended-context GGUF, not a stock Ollama tag
+### Context vs sessions (the tradeoff that keeps things running)
 
-1. **Hermes rejects any model with native context < 64,000 tokens.** Stock
-   Ollama `qwen3`/`qwen3.8` tags clamp context at ~40K and can't be pushed past
-   it — `OLLAMA_CONTEXT_LENGTH` never exceeds a model's *trained* cap. The fix:
-   pull an **extended-context GGUF**, then alias it so the compose entrypoint
-   can auto-pull it like any model:
-   ```bash
-   docker compose exec ollama ollama pull hf.co/unsloth/Qwen3.8-27B-GGUF:Qwen3.8-27B-UD-Q4_K_M
-   # Modelfile (stdin):  FROM hf.co/unsloth/Qwen3.8-27B-GGUF:Qwen3.8-27B-UD-Q4_K_M
-   docker compose exec ollama ollama create qwen3.8-27b:q4km -f -
-   ```
-   Verify with `ollama show qwen3.8-27b:q4km` (context length) and `ollama ps`
-   (CONTEXT 131072).
-2. **"Hermes" the name ≠ agentic.** The `hermes3`/`hermes4` models are not
-   tool-callers; use a genuinely tool-capable model (qwen3.8-27b here). If
-   model downloads hit Hugging Face rate limits, provide `HF_TOKEN` (repo
-   `.env`, git-ignored).
+Gufo allocates each session a KV cache sized by the context, and caps all of it
+at the ~42 GB of *device* memory left on the 61 GB pool once the ~20 GB of
+weights are resident. So **context and concurrency trade off**:
 
-### Why the gateway is stable here (the dashboard needs a live gateway)
+| Context | Max sessions | Used KV |
+|---|---|---|
+| 64K | 6 | ~40 GB |
+| ~82K | 3 | ~41 GB |
+| **128K** | **3** | ~32 GB |
+| 128K | 4+ | won't load (> 42 GB) |
 
-The image's `/etc/cont-init.d/02-reconcile-profiles` reads the persisted
-`gateway_state` and auto-spawns a **second** s6-supervised `gateway --replace`
-that SIGTERMs the primary gateway seconds after ready — a forever crash-loop on
-a no-messaging-platform local install (hermes-agents issue #42675). The seeded
-Dockerfile removes that script, so `command: gateway run` + a main-process
-gateway (Docker `restart: unless-stopped`) continuously serves the dashboard
-and API.
+Set it with Gufo's `--context` / `--sessions` in `docker-compose.yml` (e.g.
+`--context 131072 --sessions 3`), then `docker compose up -d gufo`. Hermes
+needs ≥64K and auto-compacts within whatever window it's given.
+
+> Note: `vram=0` / the "61 GB pool" is the iGPU's **GTT window** — a flat
+> ~50% carve-out of the 122 GB. The other ~61 GB is plain system RAM the GPU
+> can't see. To grow the GPU pool you'd raise the iGPU memory allocation in
+> BIOS (or via `amdgpu.gttsize`), trading system RAM for GTT.
+
+## Screenshots (highlight reel)
+
+Live captures — a fully-local Hermes (Qwen3.8-27B on ROCm) writing a story,
+plus the services portal. The engine shown is the local model; no cloud calls
+happen in any frame. (Images are stored with Git LFS.)
+
+![The services portal — one page linking every local web UI](docs/screenshots/hub-portal.png)
+
+![Hermes writing the 144-word "floating-island fox" story in the dashboard chat](docs/screenshots/chat-story-result.png)
+
+![Dashboard Sessions/History view](docs/screenshots/sessions-history.png)
 
 ## Verifying it's local + on the GPU
 
 ```bash
-docker compose exec ollama ollama ps
-#   NAME               ID          SIZE     PROCESSOR  CONTEXT ...
-#   qwen3.8-27b:q4km   …           24 GB    100% GPU   131072
-#   qwen3-4b:128k      …            4 GB    100% GPU   131072
-
-docker compose logs ollama | grep -i "inference compute"
-#   ... library=ROCm compute=gfx1151 name=ROCm0 description="Radeon 8060S Graphics"
-
+docker compose logs gufo | grep -iE "gfx1151|ROCm|load_completed" | tail
+#   ... event=load_completed ... speculative=dflash2 ...
+docker compose exec hermes hermes doctor        # checks deps incl. stt/tts
 docker compose exec hermes grep -A4 '^model:' /opt/data/config.yaml
-#   base_url: http://local-ollama:11434/v1   ← the ONLY endpoint
+#   base_url: http://gufo:8080/v1                ← the ONLY endpoint
 ```
-
-`bash scripts/verify-gpu.sh` bundles the above.
-
-## Local media generation (image + audio)
-
-Two more local services ride the same `hermes-net` — both fully on-device:
-
-| Service | Image | Gives you | Endpoint |
-|---|---|---|---|
-| **ComfyUI** | `ignatberesnev/comfyui-gfx1151` | FLUX.1-schnell images on the Radeon (native gfx1151) | http://localhost:8188 (GUI + `/prompt` API) |
-| **Piper** | `kamilkrawiec/piper-openai-tts` | WAV narration, CPU, OpenAI-compatible | http://localhost:5000 `/v1/audio/speech` |
-
-```bash
-# generate an image (FLUX.1-schnell, configured workflow) → host-workspace/gallery/
-bash scripts/comfy-image.sh "a red fox on a floating island under the stars, cinematic"
-
-# generate a ~15 s text-to-video clip (Wan 2.1 T2V 1.3B) → host-workspace/videos/
-bash scripts/comfy-video.sh "a red fox on a floating island under the stars, cinematic" 15 fox_story
-
-# synthesize narration → <out>.wav
-bash scripts/piper-tts.sh "I am a fully local AI agent on an AMD machine." out.wav
-```
-
-Video generation uses **Wan 2.1 T2V 1.3B** (Apache-2.0) through the same on-device
-ComfyUI (832×480, VP9 WebM). The `local-media-studio` skill teaches the agent both
-image and video, so you can ask it to *"write a short story and make a 15 second
-video"* and it will render it offline.
-
-**VRAM note:** the two hot Ollama models hold ~35 GB of the ~61 GB pool. To give
-ComfyUI room to render, unload them first (they reload on demand):
-```bash
-docker compose exec ollama ollama stop qwen3.8-27b:q4km
-docker compose exec ollama ollama stop qwen3-4b:128k
-# ...generate image... then warm them again (24h keep-alive):
-docker compose exec ollama ollama run qwen3.8-27b:q4km --keepalive 24h "ok"
-docker compose exec ollama ollama run qwen3-4b:128k --keepalive 24h "ok"
-```
-
-## Making the tutorial video entirely on-device
-
-The Hermes container ships a **fully-local video toolchain**, so the local
-agent itself can produce the YouTube tutorial (no cloud):
-
-- **Render** — `ascii-video` skill (numpy + scipy + PIL + ffmpeg present).
-- **Animation** — `manim-video` skill (install `manim` inside the container).
-- **Narration** — local TTS: `espeak-ng` (installed) or `piper-tts` for a
-  smoother neural voice.
-- **Assembly** — `ffmpeg` (ships in the image).
-
-Give the job to the local agent:
-```bash
-docker compose exec hermes hermes chat "$(cat video/BUILD-PROMPT.md)" --in /work
-```
-Put any assets the agent needs in `./host-workspace` first (visible at `/work`).
 
 ## Customising
 
-- **Model:** set `OLLAMA_LOCAL_MODEL` / `OLLAMA_SUBAGENT_MODEL` (defaults
-  `qwen3.8-27b:q4km` / `qwen3-4b:128k`), then
-  `docker compose exec hermes hermes config set model.default <name>`.
-  Any local model with **≥64K native context** and tool-calling works.
-- **Agent's working files:** whatever you drop in `./host-workspace` (mounted at
-  `/work`) is what the agent can touch.
+- **Context / concurrency:** edit Gufo's `--context` / `--sessions` in compose
+  and `docker compose up -d gufo` (see the tradeoff table above).
+- **Agent's working files:** whatever you drop in `./host-workspace` (mounted
+  at `/work`) is what the agent can touch.
+- **Whisper model size / Piper voice:** `stt.local.model` and `tts.piper.voice`
+  in `hermes/config.yaml` (models download on first use).
 
 ## Troubleshooting
 
 - **GPU not detected / falls back to CPU:** confirm `ls /dev/kfd /dev/dri`
   exists and the compose `group_add` IDs match (`getent group video render`).
-  On 8060S/8050S it's detected natively; for an unsupported ASIC uncomment
-  `HSA_OVERRIDE_GFX_VERSION`.
-- **"context window … below the minimum 64,000"** → the model's native context
-  is <64K. Use the extended-context GGUF + `ollama create` aliasing above
-  (never a stock ~40K Qwen tag) or pick another ≥64K model.
-- **Tool calls fail with `tool_call requires 'calls'`** → the model isn't
-  emitting valid tool calls on Ollama's OpenAI endpoint. Use a genuinely
-  tool-capable ≥64K model (qwen3.8-27b:q4km here); `hermes3`/`hermes4` are not
-  tool-callers.
-- **HF download 403s for the model** → put the HF token in the repo `.env`
-  (`HF_TOKEN=…`, git-ignored); compose passes `${HF_TOKEN}` into the services.
+- **`... sessions at ... exceed device memory` from `gufo`:** the KV budget is
+  ~42 GB of device memory — lower `--sessions` and/or `--context`.
+- **Local voice fails: `open() got an unexpected keyword argument
+  'metadata_errors'`:** PyAV must be `<19` — it's pinned in the Dockerfile; a
+  fresh image build restores it.
+- **Voice model download fails (`Permission denied: ...`):** the service user's
+  writable home is `/opt/data`; `HF_HOME=/opt/data/hf-cache` is set in compose.
+- **Desktop drops its live socket after a restart:** set a stable
+  `DASHBOARD_SESSION_TOKEN` (see Desktop section) so `/api/ws?token=` stays
+  valid — the ephemeral token rotates on every gateway restart.
 - **`docker: permission denied`** → add your user to the docker group and
   re-login (a fresh tab from an existing login session may keep stale groups —
   use `newgrp docker`).

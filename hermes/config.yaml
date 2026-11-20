@@ -9,12 +9,16 @@ model:
   base_url: http://gufo:8080/v1
   api_key: "none"             # local server doesn't validate it, but the header is sent
 
-# Gufo serves this one model for subagent/delegated tasks too (already resident),
+# Gufo serves ONE model for subagent/delegated tasks too (already resident),
 # so delegation stays on the same endpoint and clears the 64K context floor.
+# Match max_concurrent_children to Gufo's --sessions: the gateway/desktop uses a
+# slot, the main chat another, so with 3 sessions you have ~1 free for a child.
+# Raise it (toward 4) if you run Gufo at 64K/6-session instead.
 delegation:
   model: qwen27-q4
   base_url: http://gufo:8080/v1
   api_key: "none"
+  max_concurrent_children: 1
 
 # Web-dashboard plugins (dashboard-only "services" tab + installed skills):
 plugins:
