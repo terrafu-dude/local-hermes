@@ -51,9 +51,9 @@ services:
       - --dflash-model
       - /home/gufo/.local/share/gufo/models/qwen27-q4/Qwen3.8-27B-DFlash2-Q4_K_M.gguf
       - --sessions
-      - "2"                   # 124K context: only 2 sessions fit the pool (~54 GB)
+      - "6"                   # ceiling: 6×6.7 GB KV = 40 GB ≤ ~42 GB device-mem budget (61 GB pool − ~20 GB weights)
       - --context
-      - "124864"              # ~124K window (≥64K Hermes floor; model native ctx is higher)
+      - "65536"               # 64K = Hermes's minimum (6×64K KV = 40 GB)
       - --host
       - 0.0.0.0
       - --port
@@ -96,48 +96,6 @@ services:
       - ollama_models:/root/.ollama
     ports:
       - "11434:11434"   # host-facing, handy for curl demos / ollama CLI
-    networks:
-      - hermes-net
-
-  comfyui:
-    # Local text-to-image: ComfyUI built specifically for gfx1151 (Strix Halo).
-    # Recommended model FLUX.1-schnell (Apache-2.0). Web UI + API on :8188.
-    image: ignatberesnev/comfyui-gfx1151:v0.2
-    container_name: local-comfyui
-    restart: unless-stopped
-    devices:
-      - /dev/kfd:/dev/kfd
-      - /dev/dri:/dev/dri
-    group_add:
-      - "44"     # video
-      - "990"    # render
-    environment:
-      # Authenticate HF model downloads (from .env / HF_TOKEN) — avoids rate limits.
-      HF_TOKEN: ${HF_TOKEN:-}
-    volumes:
-      # Mounting at /opt/ComfyUI (root) is REQUIRED: the image copies its
-      # pre-cloned ComfyUI here on first boot, but only if the dir already
-      # exists (its cp target isn't auto-created — image quirk).
-      - comfyui_home:/opt/ComfyUI           # code + checkpoints/VAE/encoders + output
-      - ./host-workspace/gallery:/opt/ComfyUI/output   # generated images land here (host-visible)
-    ports:
-      - "8188:8188"     # ComfyUI web + /prompt API
-    networks:
-      - hermes-net
-
-  piper:
-    # Local neural TTS (CPU, no GPU contention): OpenAI-compatible /v1/audio/speech.
-    image: kamilkrawiec/piper-openai-tts:latest
-    container_name: local-piper
-    restart: unless-stopped
-    platform: linux/amd64
-    environment:
-      PORT: "5000"
-      HF_TOKEN: ${HF_TOKEN:-}      # authenticated Piper voice downloads
-    volumes:
-      - piper_data:/data     # downloaded voices persist here
-    ports:
-      - "5000:5000"
     networks:
       - hermes-net
 
@@ -227,7 +185,5 @@ networks:
 volumes:
   ollama_models:
   hermes_data:
-  comfyui_home:
-  piper_data:
   openwebui_data:
   gufo_extensions:
