@@ -17,10 +17,57 @@
 name: local-hermes
 
 services:
+  gufo:
+    # Gufo — the Strix Halo-native inference engine (gfx1151/Radeon 8060S).
+    # Serves Qwen3.8-27B (Q4_K_XL + DFlash2 spec-draft) with an OpenAI-compatible
+    # API on :8080 → published at :8000. Replaces Ollama as the LLM server.
+    image: ghcr.io/gufo-org/toolboxes/gufo-runtime:latest
+    container_name: local-gufo
+    restart: unless-stopped
+    devices:
+      - /dev/kfd
+      - /dev/dri
+      - /dev/accel/accel0     # NPU (used by speech/vision extensions)
+    group_add:
+      - "44"                  # video
+      - "990"                 # render
+    volumes:
+      # Persist installed model weights + the MTP/DFlash draft (installed once via
+      #  docker compose exec gufo gufo model install qwen27-q4 )
+      - ./host-workspace/gufo-models:/home/gufo/.local/share/gufo/models
+      - gufo_extensions:/home/gufo/.local/share/gufo/extensions
+    ports:
+      - "8000:8080"          # host-facing OpenAI API (8099/8119 collide with the hub/dashboard)
+    command:
+      - gufo
+      - serve
+      - llm
+      - --model
+      - /home/gufo/.local/share/gufo/models/qwen27-q4/Qwen3.8-27B-UD-Q4_K_XL.gguf
+      - --served-model-name
+      - qwen27-q4
+      - --speculative
+      - dflash2
+      - --dflash-model
+      - /home/gufo/.local/share/gufo/models/qwen27-q4/Qwen3.8-27B-DFlash2-Q4_K_M.gguf
+      - --sessions
+      - "4"                   # 4×64K KV ≈ 36 GB + ~20 GB weights, fits the pool
+      - --context
+      - "65536"              # ≥64K so Hermes's context floor is satisfied
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+    networks:
+      - hermes-net
+
+  # Former LLM server kept as an opt-in fallback (start with: docker compose --profile ollama-fallback up -d ollama)
   ollama:
     image: ollama/ollama:rocm
     container_name: local-ollama
     restart: unless-stopped
+    profiles:
+      - ollama-fallback
     environment:
       # Listen on all interfaces so the hermes container can reach us.
       OLLAMA_HOST: 0.0.0.0
@@ -107,19 +154,20 @@ services:
       - hermes-net
 
   openwebui:
-    # Ollama's browser UI ("access ollama directly via its web interface").
+    # Browser chat UI, now pointed at Gufo's OpenAI-compatible API.
     image: ghcr.io/open-webui/open-webui:main
     container_name: local-openwebui
     restart: unless-stopped
     environment:
-      OLLAMA_BASE_URL: http://ollama:11434
+      OPENAI_API_BASE_URL: http://gufo:8080/v1
+      OPENAI_API_KEY: "none"
       HF_TOKEN: ${HF_TOKEN:-}
     volumes:
       - openwebui_data:/app/backend/data
     ports:
       - "3000:8080"
     depends_on:
-      - ollama
+      - gufo
     networks:
       - hermes-net
 
@@ -164,7 +212,7 @@ services:
       - "8642:8642"     # gateway OpenAI-compatible API / health
       - "9120:9119"     # local web dashboard (distinct host port)
     depends_on:
-      - ollama
+      - gufo
     networks:
       - hermes-net
 
@@ -178,3 +226,4 @@ volumes:
   comfyui_home:
   piper_data:
   openwebui_data:
+  gufo_extensions:
