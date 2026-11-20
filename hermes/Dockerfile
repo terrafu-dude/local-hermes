@@ -20,6 +20,12 @@ COPY plugins/services /opt/data/plugins/services
 # (espeak-ng). Everything runs offline on this box.
 RUN /opt/hermes/.venv/bin/python -m ensurepip && \
     /opt/hermes/.venv/bin/python -m pip install --no-cache-dir --quiet numpy scipy && \
+    # ── Fully-local voice: faster-whisper (STT) + piper (TTS) ────────────────
+    # faster-whisper needs PyAV <19 (19 dropped the metadata_errors kwarg it uses
+    # to decode audio); pin it or local transcription fails with
+    # "open() got an unexpected keyword argument 'metadata_errors'".
+    /opt/hermes/.venv/bin/python -m pip install --no-cache-dir --quiet \
+        "faster-whisper" "piper-tts" "av<19" && \
     apt-get update -qq && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends espeak-ng && \
     rm -rf /var/lib/apt/lists/*

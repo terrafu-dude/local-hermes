@@ -20,3 +20,14 @@ delegation:
 plugins:
   enabled:
     - services
+
+# Fully-local voice (free): faster-whisper STT + piper TTS, no cloud keys.
+# Engines (faster-whisper, piper-tts, av<19) are baked into the image via the
+# Dockerfile. Whisper model + piper voice download on first use into $HOME/.cache.
+stt:
+  enabled: true
+  provider: local          # faster-whisper (free, local)
+  local:
+    model: base            # tiny | base | small | medium | large-v3 | turbo
+tts:
+  provider: piper          # local neural TTS (free); set tts.piper.voice to switch
