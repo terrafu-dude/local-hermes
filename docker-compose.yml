@@ -51,9 +51,9 @@ services:
       - --dflash-model
       - /home/gufo/.local/share/gufo/models/qwen27-q4/Qwen3.8-27B-DFlash2-Q4_K_M.gguf
       - --sessions
-      - "4"                   # 4×64K KV ≈ 36 GB + ~20 GB weights, fits the pool
+      - "2"                   # 124K context: only 2 sessions fit the pool (~54 GB)
       - --context
-      - "65536"              # ≥64K so Hermes's context floor is satisfied
+      - "124864"              # ~124K window (≥64K Hermes floor; model native ctx is higher)
       - --host
       - 0.0.0.0
       - --port
