@@ -46,11 +46,19 @@ Linux + Docker**. Runs fully offline after first boot.
 
 ```bash
 git clone git@github.com:terrafu-dude/local-hermes.git && cd local-hermes
-cp .env.example .env              # optionally set HF_TOKEN to avoid rate limits
-docker compose up -d --build      # first boot installs the Gufo model (~21 GB)
+cp .env.example .env              # optionally set HF_TOKEN / VNC_PASSWORD
+./up.sh                           # ONE command: provisions the host bot-screen
+                                  # VNC desktop (first run asks sudo once), then
+                                  # `docker compose up -d --build`
 curl -s http://localhost:8000/v1/models     # → qwen27-q4 (served on-device)
 docker compose exec hermes hermes chat -q "Hi, in one short sentence."   # agent answers via Gufo
 ```
+
+> **Use `./up.sh`, not a bare `docker compose up`.** The Hermes Desktop app's
+> **bot screen** needs a real desktop on the machine, and Docker containers
+> can't install host packages — so `up.sh` is the baked-in hook: it installs the
+> host VNC + XFCE packages once (one sudo prompt), starts a headless VNC desktop
+> (port 5901), then runs `docker compose up -d --build`.
 
 Everything after the first boot is **fully offline**.
 
@@ -86,6 +94,21 @@ openssl rand -hex 24                      # then in .env:
 docker compose up -d hermes               # re-apply the env
 ```
 **URL:** `http://localhost:9120` · **Token:** the `DASHBOARD_SESSION_TOKEN` value.
+
+### Bot screen (vision of the agent's desktop)
+
+The Desktop app can show a **bot screen** — a live VNC view of a virtual desktop
+the agent acts on. That desktop lives on the **host** (a headless XFCE session),
+not in Docker (a container can't install host packages). `scripts/up.sh`
+provisions it automatically as part of `./up.sh`:
+
+- installs the host VNC + XFCE packages (once — this is the one sudo prompt),
+- sets a VNC password (`VNC_PASSWORD` in `.env`, default `hermes`),
+- starts a host VNC desktop on `vnc://localhost:5901` (display `:1`, 1440×900).
+
+In the Desktop app, connect/point the bot screen at **`vnc://localhost:5901`**
+with that password. Verify the desktop is up with
+`pgrep -u "$USER" -f "Xvnc.*:1"`.
 
 ## Voice (fully local, free)
 
