@@ -27,8 +27,18 @@ RUN /opt/hermes/.venv/bin/python -m ensurepip && \
     /opt/hermes/.venv/bin/python -m pip install --no-cache-dir --quiet \
         "faster-whisper" "piper-tts" "av<19" && \
     apt-get update -qq && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends espeak-ng && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends espeak-ng \
+        # ── Headless virtual desktop for the Hermes Desktop "bot screen" ────────
+        # TigerVNC + XFCE run INSIDE this container (baked in, no host install).
+        tigervnc-standalone-server tightvncpasswd xfce4-session xfce4-panel xfwm4 xfdesktop4 \
+        xfce4-settings xfce4-terminal dbus-x11 x11-xserver-utils x11-utils \
+        x11-xkb-utils xauth fonts-dejavu-core && \
     rm -rf /var/lib/apt/lists/*
+
+# Bring-up wrapper: starts the vncserver (:1) as the `hermes` user, then runs
+# the gateway. Referenced by the compose `command`.
+COPY start-with-desktop.sh /opt/hermes/start-with-desktop.sh
+RUN chmod +x /opt/hermes/start-with-desktop.sh
 
 # ── Stable local gateway (dashboard + API) ────────────────────────────
 # The image's /etc/cont-init.d/02-reconcile-profiles honors gateway_state

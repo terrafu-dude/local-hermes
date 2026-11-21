@@ -144,7 +144,7 @@ services:
     # dashboard + OpenAI API enabled (HERMES_GATEWAY_NO_SUPERVISE keeps it out
     # of the s6 supervisor loop — issue #42675), so Docker's restart policy
     # revives it on crash instead of the built-in supervisor.
-    command: ["gateway", "run"]
+    command: ["/opt/hermes/start-with-desktop.sh"]   # starts the VNC bot-screen desktop, then `gateway run`
     environment:
       # OpenAI-compatible API for the local agent (health + completions).
       API_SERVER_ENABLED: "true"
@@ -168,6 +168,8 @@ services:
       # $HF_HOME. Point it at the writable, service-owned /opt/data volume so
       # downloads persist across recreates and never fail on a non-writable $HOME.
       HF_HOME: /opt/data/hf-cache
+      # VNC password for the in-container bot-screen desktop (vnc://localhost:5901).
+      VNC_PASSWORD: ${VNC_PASSWORD:-hermes}
     volumes:
       # Named volume seeds from the baked /opt/data on first boot and persists
       # sessions / skills / memory across container recreate.
@@ -177,6 +179,7 @@ services:
     ports:
       - "8642:8642"     # gateway OpenAI-compatible API / health
       - "9120:9119"     # local web dashboard (distinct host port)
+      - "5901:5901"     # in-container VNC desktop — Hermes Desktop "bot screen"
     depends_on:
       - gufo
     networks:
